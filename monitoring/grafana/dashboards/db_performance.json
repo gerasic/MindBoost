@@ -1,0 +1,124 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 1,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": { "h": 3, "w": 6, "x": 0, "y": 0 },
+      "type": "timeseries",
+      "title": "DB Query Duration (avg)",
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" } } },
+      "options": { "legend": { "showLegend": true }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum by (query_name) (rate(db_query_duration_seconds_sum[1m])) / sum by (query_name) (rate(db_query_duration_seconds_count[1m]))",
+          "legendFormat": "{{query_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 0 },
+      "type": "timeseries",
+      "title": "DB QPS (1m)",
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" } } },
+      "options": { "legend": { "showLegend": true }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum by (query_name) (rate(db_query_duration_seconds_count[1m]))",
+          "legendFormat": "{{query_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 0 },
+      "type": "timeseries",
+      "title": "Active DB Connections",
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" } } },
+      "options": { "legend": { "showLegend": false }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(pg_stat_database_numbackends)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 0 },
+      "type": "timeseries",
+      "title": "Replication Lag (s)",
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" } } },
+      "options": { "legend": { "showLegend": false }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "pg_replication_lag_seconds",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": { "h": 3, "w": 6, "x": 0, "y": 3 },
+      "type": "timeseries",
+      "title": "Deadlocks per Hour",
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" } } },
+      "options": { "legend": { "showLegend": false }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "sum(rate(pg_stat_database_deadlocks[1h]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 3 },
+      "type": "timeseries",
+      "title": "DB Query Duration (max)",
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" } } },
+      "options": { "legend": { "showLegend": true }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "max_over_time(db_query_duration_seconds_max[5m])",
+          "legendFormat": "{{query_name}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 41,
+  "tags": [],
+  "templating": { "list": [] },
+  "timepicker": {},
+  "timezone": "",
+  "title": "DB Performance Metrics",
+  "uid": "e92559d7-d670-46db-818a-4f7b9d9cd66d",
+  "version": 3
+}

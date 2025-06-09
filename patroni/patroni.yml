@@ -1,0 +1,43 @@
+  scope: pgcluster
+  namespace: /service/pgcluster
+
+  restapi:
+    listen:  "%(PATRONI_RESTAPI_LISTEN)s"
+    connect_address: "%(PATRONI_RESTAPI_CONNECT_ADDRESS)s"
+
+  etcd3:
+    endpoints:
+      - "http://etcd1:2379"
+      - "http://etcd2:2379"
+      - "http://etcd3:2379"
+    protocol: http
+
+  bootstrap:
+    dcs:
+      ttl: 30
+      loop_wait: 10
+      retry_timeout: 10
+
+    initdb:
+      - encoding: UTF8
+
+    pg_hba:
+      - host all all 0.0.0.0/0 md5
+      - host replication replicator 0.0.0.0/0 md5
+
+    slots:
+      patroni2: {}
+      patroni3: {}
+
+  postgresql:
+    listen:         "%(PATRONI_POSTGRESQL_LISTEN)s"
+    connect_address: "%(PATRONI_POSTGRESQL_CONNECT_ADDRESS)s"
+    data_dir:       "%(PATRONI_POSTGRESQL_DATA_DIR)s"
+    bin_dir:        /usr/lib/postgresql/15/bin
+    authentication:
+      superuser:
+        username: "%(PATRONI_SUPERUSER_USERNAME)s"
+        password: "%(PATRONI_SUPERUSER_PASSWORD)s"
+      replication:
+        username: "%(PATRONI_REPLICATION_USERNAME)s"
+        password: "%(PATRONI_REPLICATION_PASSWORD)s"

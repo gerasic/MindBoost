@@ -1,0 +1,273 @@
+version: "3.9"
+
+services:
+  etcd1:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: etcd1
+    hostname: etcd1
+    networks: [patroni_net]
+    environment:
+      - ETCD_NAME=etcd1
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd1:2380
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd1:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_INITIAL_CLUSTER=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=pg_etcd_cluster
+    volumes:
+      - etcd1-data:/var/lib/etcd
+
+  etcd2:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: etcd2
+    hostname: etcd2
+    networks: [patroni_net]
+    environment:
+      - ETCD_NAME=etcd2
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd2:2380
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd2:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_INITIAL_CLUSTER=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=pg_etcd_cluster
+    volumes:
+      - etcd2-data:/var/lib/etcd
+
+  etcd3:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: etcd3
+    hostname: etcd3
+    networks: [patroni_net]
+    environment:
+      - ETCD_NAME=etcd3
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd3:2380
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd3:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_INITIAL_CLUSTER=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=pg_etcd_cluster
+    volumes:
+      - etcd3-data:/var/lib/etcd
+
+  patroni1:
+    build:
+      context: ./patroni
+      dockerfile: Dockerfile
+    container_name: patroni1
+    hostname: patroni1
+    env_file: .env
+    depends_on:
+      - etcd1
+      - etcd2
+      - etcd3
+    networks:
+      - patroni_net
+    environment:
+      - PATRONI_NAME=patroni1
+      - PATRONI_RESTAPI_CONNECT_ADDRESS=patroni1:8008
+      - PATRONI_POSTGRESQL_CONNECT_ADDRESS=patroni1:5432
+    ports:
+      - "8008:8008"
+
+  patroni2:
+    build:
+      context: ./patroni
+      dockerfile: Dockerfile
+    container_name: patroni2
+    hostname: patroni2
+    env_file: .env
+    depends_on:
+      - etcd1
+      - etcd2
+      - etcd3
+    networks:
+      - patroni_net
+    environment:
+      - PATRONI_NAME=patroni2
+      - PATRONI_RESTAPI_CONNECT_ADDRESS=patroni2:8008
+      - PATRONI_POSTGRESQL_CONNECT_ADDRESS=patroni2:5432
+    ports:
+      - "8009:8008"
+
+  patroni3:
+    build:
+      context: ./patroni
+      dockerfile: Dockerfile
+    container_name: patroni3
+    hostname: patroni3
+    env_file: .env
+    depends_on:
+      - etcd1
+      - etcd2
+      - etcd3
+    networks:
+      - patroni_net
+    environment:
+      - PATRONI_NAME=patroni3
+      - PATRONI_RESTAPI_CONNECT_ADDRESS=patroni3:8008
+      - PATRONI_POSTGRESQL_CONNECT_ADDRESS=patroni3:5432
+    ports:
+      - "8010:8008"
+
+  haproxy:
+    image: haproxy:2.4
+    container_name: haproxy
+    depends_on:
+      - patroni1
+      - patroni2
+      - patroni3
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - patroni_net
+
+  flyway:
+    image: flyway/flyway:9
+    container_name: flyway
+    restart: "no"
+    depends_on:
+      - haproxy
+    volumes:
+      - ./migrations:/flyway/sql
+    environment:
+      FLYWAY_URL: jdbc:postgresql://haproxy:5432/${DB_NAME}?targetServerType=primary
+      FLYWAY_USER: ${DB_USER}
+      FLYWAY_PASSWORD: ${DB_PASSWORD}
+      FLYWAY_BASELINE_ON_MIGRATE: "true"
+      FLYWAY_TARGET: ${MIGRATION_VERSION:-latest}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+    command: -connectRetries=10 migrate
+    networks:
+      - patroni_net
+
+  analysts:
+    build:
+      context: ./seeder
+      dockerfile: Dockerfile
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+    networks:
+      - patroni_net
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ANALYST_NAMES: ${ANALYST_NAMES}
+    command: ["python", "create_analysts.py"]
+
+  seed:
+    build:
+      context: ./seeder
+      dockerfile: Dockerfile
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      SEED_COUNT: ${SEED_COUNT}
+      MIGRATION_VERSION: ${MIGRATION_VERSION:-latest}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    command: [ "python", "seed.py" ]
+    networks:
+      - patroni_net
+
+  load-genetator:
+    build:
+      context: ./load-generator
+    container_name: load-generator
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - patroni_net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - patroni_net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    networks:
+      - patroni_net
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres-exporter
+    depends_on:
+      - haproxy
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${DB_USER}:${DB_PASSWORD}@haproxy:5432/${DB_NAME}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    restart: unless-stopped
+    networks:
+      - patroni_net
+
+  backup:
+    build:
+      context: ./backup
+    container_name: pg-backup
+    restart: unless-stopped
+    environment:
+      DB_HOST: patroni1
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT}
+      BACKUP_INTERVAL_CRON: ${BACKUP_INTERVAL_CRON}
+    volumes:
+      - ./backups:/backups
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - patroni_net
+
+volumes:
+  etcd1-data:
+  etcd2-data:
+  etcd3-data:
+  pgdata-patroni1:
+  pgdata-patroni2:
+  pgdata-patroni3:
+
+networks:
+  patroni_net:
+    driver: bridge
